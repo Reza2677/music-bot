@@ -148,5 +148,5 @@ USER_MESSAGES = {
 }
 
 # آستانه تطابق فازی برای پیشنهاد نام خواننده
-FUZZY_MATCH_THRESHOLD = 75 # از ۱۰۰، قابل تنظیم
+FUZZY_MATCH_THRESHOLD = 80 # از ۱۰۰، قابل تنظیم
 MAX_FUZZY_SUGGESTIONS = 5 # حداکثر تعداد پیشنهاد برای نمایش
