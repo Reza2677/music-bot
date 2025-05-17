@@ -1,13 +1,14 @@
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler,
-    ApplicationBuilder
+    ApplicationBuilder, CallbackQueryHandler # CallbackQueryHandler اضافه شد
 )
 import asyncio
 
 from music_bot.config import (
     TOKEN, DB_NAME, TRACK_DB_NAME, logger, KEYBOARD_TEXTS,
     MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER, DELETE_SINGER, REMOVE_LIST_CONFIRM,
+    CONFIRM_SINGER_SUGGESTION, # وضعیت جدید اضافه شد
     APP_ENV
 )
 
@@ -19,7 +20,7 @@ from music_bot.services.music_fetcher import MusicFetcher
 from music_bot.services.track_searcher import TrackSearcher
 
 from music_bot.handlers import command_handlers
-from music_bot.handlers import menu_handlers
+from music_bot.handlers import menu_handlers # شامل singer_suggestion_callback_handler هم می‌شود
 from music_bot.handlers import job_handlers
 
 
@@ -32,10 +33,6 @@ class MusicBot:
         logger.info(f"MusicBot instance CREATED. APP_ENV: {APP_ENV}")
 
     async def _initialize_bot_dependencies(self):
-        """
-        Initializes database handlers, services, queue, worker, and jobs.
-        This is called manually after application is initialized.
-        """
         logger.info(">>>>>>>> _initialize_bot_dependencies: ENTERED <<<<<<<<")
         if not self.application:
             logger.critical("_initialize_bot_dependencies: Application is not initialized. Cannot proceed.")
@@ -50,6 +47,13 @@ class MusicBot:
             self.application.bot_data['user_db_handler'] = user_db
             self.application.bot_data['track_db_handler'] = track_db
             logger.info("_initialize_bot_dependencies: Database handlers ADDED to bot_data.")
+
+            # --- کش کردن لیست خوانندگان ---
+            logger.info("_initialize_bot_dependencies: Fetching and caching all singer names...")
+            all_singer_names_set = await track_db.get_all_unique_singer_names()
+            self.application.bot_data['all_singer_names_list'] = list(all_singer_names_set)
+            logger.info(f"_initialize_bot_dependencies: Stored {len(all_singer_names_set)} unique singer names in bot_data.")
+            # -----------------------------
 
             logger.info("_initialize_bot_dependencies: Initializing services...")
             user_manager = UserManager(user_db)
@@ -66,23 +70,17 @@ class MusicBot:
             self.application.bot_data['track_searcher'] = track_searcher
             logger.info("_initialize_bot_dependencies: Core services ADDED to bot_data.")
 
-            test_um = self.application.bot_data.get('user_manager')
-            if test_um:
-                logger.info(">>>>>>>> _initialize_bot_dependencies: user_manager RETRIEVED successfully! <<<<<<<<")
-            else:
-                logger.error(">>>>>>>> _initialize_bot_dependencies: FAILED to retrieve user_manager! <<<<<<<<")
-
             logger.info("_initialize_bot_dependencies: Initializing manual request queue and worker...")
             self.manual_request_queue = asyncio.Queue()
             self.application.bot_data['manual_request_queue'] = self.manual_request_queue
             
             self.manual_request_worker_task = asyncio.create_task(
-                menu_handlers.manual_request_worker(self.application) # پاس دادن self.application
+                menu_handlers.manual_request_worker(self.application)
             )
             logger.info("_initialize_bot_dependencies: Manual request queue and worker task STARTED.")
 
             logger.info("_initialize_bot_dependencies: Scheduling bot jobs...")
-            self._schedule_bot_jobs(self.application.job_queue) # پاس دادن job_queue از self.application
+            self._schedule_bot_jobs(self.application.job_queue)
             logger.info("_initialize_bot_dependencies: Bot jobs SCHEDULED.")
 
         except Exception as e_deps:
@@ -92,7 +90,6 @@ class MusicBot:
         logger.info(">>>>>>>> _initialize_bot_dependencies: EXITED SUCCESSFULLY <<<<<<<<")
 
     def _setup_conversation_handler(self):
-        # ... (کد این متد بدون تغییر باقی می‌ماند، همانطور که در پاسخ قبلی بود) ...
         logger.info("_setup_conversation_handler: Configuring...")
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler("start", command_handlers.start_command)],
@@ -109,17 +106,22 @@ class MusicBot:
                 ],
                 ADD_SINGER: [
                     MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['back']}$"), menu_handlers.back_to_edit_list_menu_handler),
-                    MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['delete']}$"), menu_handlers.ignore_delete_in_add_handler),
+                    MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['delete']}$"), menu_handlers.ignore_delete_in_add_handler), # این شاید دیگر لازم نباشد
                     MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(f"^({KEYBOARD_TEXTS['back']}|{KEYBOARD_TEXTS['delete']})$"), menu_handlers.save_singer_handler),
                 ],
                 DELETE_SINGER: [
                     MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['back']}$"), menu_handlers.back_to_edit_list_menu_handler),
-                    MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['add']}$"), menu_handlers.ignore_add_in_delete_handler),
+                    MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['add']}$"), menu_handlers.ignore_add_in_delete_handler), # این شاید دیگر لازم نباشد
                     MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(f"^({KEYBOARD_TEXTS['back']}|{KEYBOARD_TEXTS['add']})$"), menu_handlers.remove_singer_handler),
                 ],
                 REMOVE_LIST_CONFIRM: [
                     MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['confirm']}$"), menu_handlers.confirm_remove_list_handler),
                     MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['cancel_action']}$"), menu_handlers.cancel_remove_list_handler),
+                ],
+                CONFIRM_SINGER_SUGGESTION: [
+                    CallbackQueryHandler(menu_handlers.singer_suggestion_callback_handler, pattern="^suggest_"), # پترن می‌تواند suggest_idx_ یا suggest_none را بگیرد
+                    MessageHandler(filters.Regex(f"^{KEYBOARD_TEXTS['back']}$"), menu_handlers.back_to_add_singer_from_suggestion),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, menu_handlers.fallback_text_in_suggestion_state)
                 ],
             },
             fallbacks=[CommandHandler("cancel", command_handlers.cancel_command)],
@@ -130,33 +132,42 @@ class MusicBot:
         else:
             logger.error("_setup_conversation_handler: Application not initialized when trying to add conversation handler.")
 
-
     def _schedule_bot_jobs(self, job_queue):
-        # ... (کد این متد بدون تغییر باقی می‌ماند) ...
         logger.info("_schedule_bot_jobs: Scheduling...")
         if job_queue:
-            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=0, name="MusicDataProcessingJob")
+            # جاب اصلی روزانه که شامل پردازش موسیقی و سپس نوتیفیکیشن است
+            # (اگر از این مدل استفاده می‌کنید، مطمئن شوید job_handlers.run_daily_main_job تعریف شده)
+            # یا دو جاب جداگانه:
+            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=10, name="MusicDataProcessingJob") # تغییر نام برای وضوح
             logger.info("_schedule_bot_jobs: Music data processing job SCHEDULED.")
-            job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86400, first=0, name="DailyUserNotificationJob")
+            job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86400, first=60, name="DailyUserNotificationJob") # با کمی تاخیر نسبت به جاب اول
             logger.info("_schedule_bot_jobs: Daily user notification job SCHEDULED.")
         else:
             logger.error("_schedule_bot_jobs: JobQueue not available.")
 
     async def shutdown_manual_worker(self):
-        # ... (کد این متد بدون تغییر باقی می‌ماند) ...
         logger.info("shutdown_manual_worker: Attempting to shutdown manual worker...")
-        if self.manual_request_queue and self.manual_request_queue.empty() and self.manual_request_worker_task and not self.manual_request_worker_task.done():
-            logger.info("shutdown_manual_worker: Queue is empty, putting None to stop worker.")
-            await self.manual_request_queue.put(None)
-        elif self.manual_request_queue and not self.manual_request_queue.empty():
-            logger.warning("shutdown_manual_worker: Manual request queue is not empty. Worker will process remaining items or be cancelled.")
-            await self.manual_request_queue.put(None)
+        if self.manual_request_queue and self.manual_request_worker_task and not self.manual_request_worker_task.done():
+            # فقط اگر صف خالی است None بفرست، در غیر اینصورت اجازه بده کارگر آیتم‌های باقیمانده را پردازش کند
+            # و بعدا خودش با None خارج شود یا با cancel متوقف شود.
+            # این بخش نیاز به بازبینی دارد تا مطمئن شویم کارگر آیتم‌ها را از دست نمی‌دهد.
+            # راه ساده‌تر: همیشه None بفرست و در کارگر پس از پردازش آیتم فعلی، اگر None بود خارج شو.
+            if self.manual_request_queue.empty():
+                 logger.info("shutdown_manual_worker: Queue is empty, putting None to stop worker.")
+                 await self.manual_request_queue.put(None)
+            else:
+                 logger.warning("shutdown_manual_worker: Manual request queue is not empty. Worker will process items then stop if None is next.")
+                 # برای اطمینان از خروج، یک None دیگر هم ممکن است لازم باشد اگر آیتم‌های زیادی در صف است،
+                 # یا اینکه فقط به cancel تکیه کنیم.
+                 # فعلا یک None می‌فرستیم، کارگر باید پس از پردازش آیتم فعلی، این None را بگیرد و خارج شود.
+                 await self.manual_request_queue.put(None)
+
 
         if self.manual_request_worker_task:
             if self.manual_request_worker_task.done():
                 logger.info("shutdown_manual_worker: Worker task already done.")
             else:
-                logger.info("shutdown_manual_worker: Waiting for worker task to finish...")
+                logger.info("shutdown_manual_worker: Waiting for worker task to finish (max 10s)...")
                 try:
                     await asyncio.wait_for(self.manual_request_worker_task, timeout=10.0)
                     logger.info("shutdown_manual_worker: Worker task finished gracefully.")
@@ -165,9 +176,11 @@ class MusicBot:
                     self.manual_request_worker_task.cancel()
                     try: await self.manual_request_worker_task
                     except asyncio.CancelledError: logger.info("shutdown_manual_worker: Worker task cancellation confirmed.")
-                except Exception as e: logger.error(f"shutdown_manual_worker: Error during worker task wait/cancel: {e}")
-        else: logger.info("shutdown_manual_worker: No worker task to shut down.")
-
+                    except Exception as e_cancel: logger.error(f"shutdown_manual_worker: Error during worker task cancellation: {e_cancel}")
+                except Exception as e_wait:
+                    logger.error(f"shutdown_manual_worker: Error during worker task wait: {e_wait}")
+        else:
+            logger.info("shutdown_manual_worker: No worker task to shut down.")
 
     async def run(self):
         logger.info(f"run: Attempting to start bot with token: {'***' + self.token[-6:] if self.token else 'Not Set'}")
@@ -176,17 +189,16 @@ class MusicBot:
             self.application = (
                 ApplicationBuilder()
                 .token(self.token)
-                # .post_init(self._post_init_callback) # <--- حذف post_init از اینجا
                 .build()
             )
             logger.info("run: Application BUILT.")
 
             logger.info("run: Initializing application (native initialize)...")
-            await self.application.initialize() # این فقط کارهای داخلی PTB را انجام می‌دهد
+            await self.application.initialize() 
             logger.info("run: Application NATIVELY INITIALIZED.")
             
             logger.info("run: Manually initializing bot dependencies...")
-            await self._initialize_bot_dependencies() # <--- فراخوانی دستی متد جدید
+            await self._initialize_bot_dependencies() 
             logger.info("run: Bot dependencies INITIALIZED.")
 
             logger.info(f"run: bot_data keys AFTER manual dependencies init: {list(self.application.bot_data.keys())}")
@@ -196,7 +208,7 @@ class MusicBot:
             logger.info("run: Conversation handler SET UP.")
 
             logger.info("run: Starting application (dispatcher, job_queue)...")
-            await self.application.start() # این باید جاب‌ها را هم شروع کند (اگر قبلا در post_init بودند، حالا در _initialize_bot_dependencies هستند)
+            await self.application.start() 
             logger.info("run: Application STARTED.")
 
             logger.info("run: Starting updater (polling)...")
@@ -211,20 +223,22 @@ class MusicBot:
         except Exception as e:
             logger.critical(f"run: An unhandled exception occurred at the bot's top level: {e}", exc_info=True)
         finally:
-            # ... (بخش finally مانند قبل) ...
             logger.info("run: Initiating FINALLY block for shutdown...")
             if self.application and hasattr(self.application, 'updater') and self.application.updater.running:
                 logger.info("run: Stopping updater...")
                 await self.application.updater.stop()
+            
+            # توقف کارگر دستی قبل از shutdown کامل اپلیکیشن
+            await self.shutdown_manual_worker()
+
             if self.application:
                 logger.info("run: Shutting down application (includes stopping jobs)...")
                 await self.application.shutdown()
-            await self.shutdown_manual_worker()
+            
             logger.info("run: MusicBot application SHUT DOWN.")
 
 
 def main() -> None:
-    # ... (کد main مانند قبل) ...
     if not TOKEN:
         logger.critical("main: TELEGRAM_BOT_TOKEN is not set. Bot cannot start.")
         return
@@ -235,7 +249,7 @@ def main() -> None:
         asyncio.run(bot_instance.run())
     except RuntimeError as e:
         if "already running" in str(e).lower():
-             logger.warning("main: Event loop already running. Manual shutdown might be needed if run in an existing loop.")
+             logger.warning("main: Event loop already running.")
         else:
             logger.critical(f"main: RuntimeError during asyncio.run: {e}", exc_info=True)
             raise

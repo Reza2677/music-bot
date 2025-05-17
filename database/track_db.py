@@ -1,11 +1,9 @@
 import asyncio
 import sqlite3
 import os
-import logging # استفاده از لاگر محلی یا استاندارد
+import logging
 from contextlib import contextmanager
-
-# from music_bot.config import logger # اگر می‌خواهید از لاگر مرکزی استفاده کنید
-logger = logging.getLogger(__name__) # استفاده از لاگر محلی
+from music_bot.config import logger # استفاده از لاگر مرکزی
 
 class TrackDatabaseHandler:
     def __init__(self, db_name: str):
@@ -49,8 +47,12 @@ class TrackDatabaseHandler:
     def get_connection(self):
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path, timeout=10)
+            conn = sqlite3.connect(self.db_path, timeout=15) # افزایش timeout
             conn.row_factory = sqlite3.Row
+            try:
+                conn.execute("PRAGMA journal_mode=WAL;")
+            except sqlite3.Error as e_wal:
+                logger.warning(f"TrackDatabaseHandler ({self.db_path}): Could not set WAL mode: {e_wal}")
             yield conn
             conn.commit()
         except sqlite3.Error as e:
@@ -73,7 +75,7 @@ class TrackDatabaseHandler:
         links_set = set()
         try:
             links_set = await asyncio.to_thread(self._execute_get_all_links_sync)
-            logger.info(f"Fetched {len(links_set)} existing links from {self.db_path} into a set.")
+            # logger.debug(f"Fetched {len(links_set)} existing links from {self.db_path} into a set.") # لاگ دیباگ
         except Exception as e:
             logger.error(f"Error in get_all_links_as_set ({self.db_path}): {e}", exc_info=True)
         return links_set
@@ -96,12 +98,8 @@ class TrackDatabaseHandler:
         data_to_insert = []
         for track in tracks_data_list:
             data_to_insert.append((
-                track.get('link'),
-                track.get('en_name'),
-                track.get('en_track'),
-                track.get('fa_name'),
-                track.get('fa_track'),
-                track.get('download_link')
+                track.get('link'), track.get('en_name'), track.get('en_track'),
+                track.get('fa_name'), track.get('fa_track'), track.get('download_link')
             ))
         
         inserted_count = 0
@@ -134,8 +132,7 @@ class TrackDatabaseHandler:
             with self.get_connection() as conn:
                 cursor = conn.execute("SELECT * FROM tracks WHERE link = ? LIMIT 1", (link,))
                 row = cursor.fetchone()
-                if row:
-                    return dict(row)
+                return dict(row) if row else None
         except Exception as e:
              logger.error(f"Error in get_track_by_link ({link}) for {self.db_path}: {e}", exc_info=True)
         return None
@@ -151,3 +148,23 @@ class TrackDatabaseHandler:
         except Exception as e:
             logger.error(f"Error updating download link for {link} in {self.db_path}: {e}", exc_info=True)
             return False
+
+    async def get_all_unique_singer_names(self) -> set[str]:
+        """تمام نام‌های خوانندگان (فارسی و انگلیسی) را به صورت یک مجموعه از رشته‌ها برمی‌گرداند."""
+        singer_names = set()
+        logger.debug(f"TrackDatabaseHandler ({self.db_name}): Fetching all unique singer names...")
+        try:
+            with self.get_connection() as conn:
+                # خواندن نام‌های فارسی
+                cursor_fa = conn.execute("SELECT DISTINCT fa_name FROM tracks WHERE fa_name IS NOT NULL AND fa_name != '' AND fa_name != 'N/A'")
+                for row in cursor_fa.fetchall():
+                    singer_names.add(row['fa_name'].strip())
+                
+                # خواندن نام‌های انگلیسی
+                cursor_en = conn.execute("SELECT DISTINCT en_name FROM tracks WHERE en_name IS NOT NULL AND en_name != '' AND en_name != 'N/A'")
+                for row in cursor_en.fetchall():
+                    singer_names.add(row['en_name'].strip())
+            logger.info(f"TrackDatabaseHandler ({self.db_name}): Fetched {len(singer_names)} unique singer names.")
+        except Exception as e:
+            logger.error(f"TrackDatabaseHandler ({self.db_name}): Error fetching unique singer names: {e}", exc_info=True)
+        return singer_names
