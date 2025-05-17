@@ -138,9 +138,9 @@ class MusicBot:
             # جاب اصلی روزانه که شامل پردازش موسیقی و سپس نوتیفیکیشن است
             # (اگر از این مدل استفاده می‌کنید، مطمئن شوید job_handlers.run_daily_main_job تعریف شده)
             # یا دو جاب جداگانه:
-            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=10, name="MusicDataProcessingJob") # تغییر نام برای وضوح
+            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=0, name="MusicDataProcessingJob") # تغییر نام برای وضوح
             logger.info("_schedule_bot_jobs: Music data processing job SCHEDULED.")
-            job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86400, first=60, name="DailyUserNotificationJob") # با کمی تاخیر نسبت به جاب اول
+            job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86600, first=0, name="DailyUserNotificationJob") # با کمی تاخیر نسبت به جاب اول
             logger.info("_schedule_bot_jobs: Daily user notification job SCHEDULED.")
         else:
             logger.error("_schedule_bot_jobs: JobQueue not available.")
