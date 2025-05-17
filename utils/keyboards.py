@@ -1,48 +1,48 @@
 from telegram import ReplyKeyboardMarkup
-from ..config import VALID_TIMES, KEYBOARD_TEXTS
+from music_bot.config import KEYBOARD_TEXTS # VALID_TIMES دیگر ایمپورت نمی‌شود
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["list"]], [KEYBOARD_TEXTS["set_time"]]], 
-        resize_keyboard=True
+        [
+            [KEYBOARD_TEXTS["list"]],
+            # [KEYBOARD_TEXTS["set_time"], KEYBOARD_TEXTS["receive_music_now"]] # Set Time حذف شد
+            [KEYBOARD_TEXTS["receive_music_now"]] # Receive Music Now در یک ردیف جدا یا کنار List
+            # یا چینش دلخواه دیگر:
+            # [[KEYBOARD_TEXTS["list"], KEYBOARD_TEXTS["receive_music_now"]]]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False
     )
 
 def list_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["edit_list"], KEYBOARD_TEXTS["remove_list"]], [KEYBOARD_TEXTS["back"]]], 
+        [[KEYBOARD_TEXTS["edit_list"], KEYBOARD_TEXTS["remove_list"]], [KEYBOARD_TEXTS["back"]]],
         resize_keyboard=True
     )
 
 def edit_list_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["add"], KEYBOARD_TEXTS["delete"]], [KEYBOARD_TEXTS["back"]]], 
+        [[KEYBOARD_TEXTS["add"], KEYBOARD_TEXTS["delete"]], [KEYBOARD_TEXTS["back"]]],
         resize_keyboard=True
     )
 
-def add_singer_keyboard() -> ReplyKeyboardMarkup: # کیبورد در زمان افزودن خواننده
+def add_singer_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["back"]]], # فقط دکمه بازگشت، چون ورودی متن است
+        [[KEYBOARD_TEXTS["back"]]],
         resize_keyboard=True
     )
 
-def delete_singer_keyboard() -> ReplyKeyboardMarkup: # کیبورد در زمان حذف خواننده
+def delete_singer_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["back"]]], # فقط دکمه بازگشت
+        [[KEYBOARD_TEXTS["back"]]],
         resize_keyboard=True
     )
-    
+
 def confirm_remove_list_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KEYBOARD_TEXTS["confirm"], KEYBOARD_TEXTS["cancel_action"]]], 
-        resize_keyboard=True
+        [[KEYBOARD_TEXTS["confirm"], KEYBOARD_TEXTS["cancel_action"]]],
+        resize_keyboard=True,
+        one_time_keyboard=True
     )
 
-def set_time_keyboard() -> ReplyKeyboardMarkup:
-    keyboard = []
-    for i in range(0, len(VALID_TIMES), 2):
-        row = [VALID_TIMES[i]]
-        if i + 1 < len(VALID_TIMES):
-            row.append(VALID_TIMES[i+1])
-        keyboard.append(row)
-    keyboard.append([KEYBOARD_TEXTS["back"]])
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
