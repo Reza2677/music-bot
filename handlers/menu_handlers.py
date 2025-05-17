@@ -16,7 +16,7 @@ from music_bot.utils.keyboards import (main_menu_keyboard, list_menu_keyboard, e
 from music_bot.handlers.helper_handlers import show_user_singers_list
 
 # --- ثابت‌های تاخیر ---
-DELAY_BETWEEN_INDIVIDUAL_MANUAL_MESSAGES_S = 1.0
+DELAY_BETWEEN_INDIVIDUAL_MANUAL_MESSAGES_S = 0.3
 DELAY_AFTER_PROCESSING_EACH_USER_MANUALLY_S = 1.0
 
 # --- تابع کارگر برای صف دستی (manual_request_worker) ---
