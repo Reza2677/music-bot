@@ -12,10 +12,15 @@ DELAY_BETWEEN_DOWNLOAD_PROCESSING_S = 2
 # تاخیر بین ارسال پیام به هر کاربر (بر حسب ثانیه)
 # این مقدار را می‌توانید بر اساس تعداد کاربران و محدودیت‌های تلگرام تنظیم کنید.
 # مقادیر معمول بین 0.1 (برای تعداد کم) تا 1 یا 2 ثانیه (برای تعداد بسیار زیاد)
-DELAY_BETWEEN_USER_NOTIFICATIONS_S = 1.5 # 500 میلی‌ثانیه
+DELAY_BETWEEN_USER_NOTIFICATIONS_S = 1.5 # 1500 میلی‌ثانیه
+
+# شامل مقادیری است که نشان می‌دهد لینک دانلود نیاز به پردازش/پردازش مجدد دارد.
+INVALID_DOWNLOAD_LINK_STATES = [None, "", "N/A", "FAILED_ON_JOB", "FAILED_TO_EXTRACT"] 
+# ^^^ مطمئن شوید "FAILED_TO_EXTRACT" یا هر مقدار خاصی که استفاده می‌کنید، اینجا باشد ^^^
+
+
 
 async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
-    # ... (این بخش بدون تغییر باقی می‌ماند، همانطور که در پاسخ‌های قبلی بود) ...
     logger.info("Job: Starting FULL music processing (previews AND download links)...")
     
     music_fetcher: MusicFetcher = context.bot_data.get('music_fetcher')
@@ -25,7 +30,8 @@ async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
         logger.error("Job: MusicFetcher or TrackDatabaseHandler not found in bot_data. Aborting music processing job.")
         return
 
-    # --- بخش ۱: واکشی و ذخیره اطلاعات اولیه آهنگ‌ها ---
+    # --- بخش ۱: واکشی و ذخیره اطلاعات اولیه آهنگ‌ها (پیش‌نمایش‌ها) ---
+    logger.info("Job: Starting music preview fetching and saving part...")
     try:
         raw_tracks_from_page = await music_fetcher.fetch_new_music_previews()
         if not raw_tracks_from_page:
@@ -34,80 +40,92 @@ async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Job: Fetched {len(raw_tracks_from_page)} raw track previews. Filtering and saving...")
             existing_db_links = await track_db_handler.get_all_links_as_set()
             new_tracks_to_insert = []
-            seen_on_this_scrape = set()
+            seen_on_this_scrape = set() 
             for track_data in raw_tracks_from_page:
                 link = track_data.get('link')
-                if not link or link in seen_on_this_scrape: continue
+                if not link or link in seen_on_this_scrape: 
+                    continue
                 seen_on_this_scrape.add(link)
                 if link not in existing_db_links:
-                    track_data['download_link'] = track_data.get('download_link') 
+                    # اطمینان از اینکه download_link برای آهنگ‌های جدید None است
+                    track_data['download_link'] = None 
                     new_tracks_to_insert.append(track_data)
             
             if new_tracks_to_insert:
                 current_total_tracks = await track_db_handler.get_total_tracks()
                 slots_available = MAX_TRACKS_IN_DB - current_total_tracks
                 if slots_available > 0:
-                    new_tracks_to_insert.reverse() 
+   
                     tracks_to_actually_insert = new_tracks_to_insert[:slots_available]
                     if tracks_to_actually_insert:
                         inserted_count = await track_db_handler.save_tracks(tracks_to_actually_insert)
                         logger.info(f"Job: Saved {inserted_count} new track previews to DB.")
-                    # else: (لاگ اضافی که می‌تواند حذف شود)
-                        # logger.info("Job: No new tracks to insert after filtering for DB slots (or list became empty).") 
                 else:
                     logger.info(f"Job: DB at max capacity ({MAX_TRACKS_IN_DB}). No new previews saved.")
             else:
                 logger.info("Job: No new unique track previews to save from this fetch.")
+        logger.info("Job: Music preview fetching and saving part COMPLETED.")
     except Exception as e:
-        logger.error(f"Job: Error during preview fetching/saving: {e}", exc_info=True)
+        logger.error(f"Job: EXCEPTION during preview fetching/saving: {e}", exc_info=True)
     
-    # --- بخش ۲: واکشی و آپدیت لینک‌های دانلود ---
-    logger.info("Job: Starting download link extraction for tracks without one...")
+    # --- بخش ۲: واکشی و آپدیت لینک‌های دانلود برای آهنگ‌هایی که لینک معتبر ندارند ---
+    logger.info("Job: Starting download link extraction/update part...")
     try:
-        all_tracks_in_db = await track_db_handler.load_tracks() 
-        tracks_needing_download_link = [
-            t for t in all_tracks_in_db 
-            if t.get('download_link') is None or t.get('download_link') in ['', "N/A", "FAILED_ON_JOB"]
+        all_tracks_in_db = await track_db_handler.load_tracks() # مرتب شده بر اساس جدیدترین (created_at DESC)
+        
+        tracks_needing_download_link_update = [
+            track for track in all_tracks_in_db 
+            if track.get('download_link') in INVALID_DOWNLOAD_LINK_STATES # <--- شرط اصلی
         ]
         
-        tracks_to_process_download = tracks_needing_download_link
 
-        if not tracks_to_process_download:
-            logger.info("Job: No tracks found needing a download link update.")
+        tracks_to_process_this_run = tracks_needing_download_link_update # پردازش همه موارد یافت شده
+
+        if not tracks_to_process_this_run:
+            logger.info("Job: No tracks found needing a download link update in this run.")
         else:
-            logger.info(f"Job: Found {len(tracks_to_process_download)} tracks to process for download links.")
-            successful_link_extractions = 0
-            for track_info_from_db in tracks_to_process_download:
+            logger.info(f"Job: Found {len(tracks_to_process_this_run)} tracks to process/re-process for download links.")
+            successful_link_updates_this_run = 0
+            
+            for track_info_from_db in tracks_to_process_this_run:
                 track_page_link = track_info_from_db.get('link')
-                track_id = track_info_from_db.get('id')
+                track_id_for_log = track_info_from_db.get('id', 'UnknownID')
+                current_dl_status = track_info_from_db.get('download_link', 'None')
 
                 if not track_page_link:
-                    logger.warning(f"Job: Skipping track with missing page link: {track_info_from_db}")
+                    logger.warning(f"Job: Skipping track ID {track_id_for_log} due to missing page link.")
                     continue
 
-                logger.debug(f"Job: Processing track ID {track_id}, Link: {track_page_link} for download link.")
+                logger.info(f"Job: Processing track ID {track_id_for_log}, Link: {track_page_link} (Current DL Status: '{current_dl_status}')")
                 
                 extracted_dl_link = await music_fetcher.get_single_track_download_link(track_page_link)
                 
-                if extracted_dl_link:
-                    updated = await track_db_handler.update_track_download_link(track_page_link, extracted_dl_link)
-                    if updated:
-                        successful_link_extractions += 1
-                        logger.debug(f"Job: Successfully updated DB for track ID {track_id} with download link.")
+                # بررسی اینکه آیا لینک استخراج شده معتبر است یا خیر
+                # یک لینک معتبر نباید در INVALID_DOWNLOAD_LINK_STATES باشد و باید یک رشته غیرتهی باشد
+                is_extracted_link_valid = extracted_dl_link and isinstance(extracted_dl_link, str) and extracted_dl_link not in INVALID_DOWNLOAD_LINK_STATES
+
+                if is_extracted_link_valid:
+                    updated_in_db = await track_db_handler.update_track_download_link(track_page_link, extracted_dl_link)
+                    if updated_in_db:
+                        successful_link_updates_this_run += 1
+                        logger.info(f"Job: Successfully extracted and updated DB for track ID {track_id_for_log} with new download link: {extracted_dl_link[:50]}...") # نمایش بخشی از لینک
                     else:
-                        logger.warning(f"Job: Failed to update DB for track ID {track_id} (link: {track_page_link}).")
+                        logger.warning(f"Job: Extracted download link for track ID {track_id_for_log} but FAILED to update DB (link: {track_page_link}). This might be a DB issue.")
                 else:
+                    # اگر استخراج ناموفق بود یا لینک استخراج شده نامعتبر بود،
+                    # دوباره وضعیت را به "FAILED_ON_JOB" آپدیت می‌کنیم تا در اجرای بعدی جاب دوباره تلاش شود.
+                    # این کار باعث می‌شود created_at رکورد تغییر نکند (مگر اینکه بخواهید زمان آخرین تلاش را ذخیره کنید).
+                    logger.warning(f"Job: Failed to extract a valid download link for track ID {track_id_for_log} (Extracted: '{extracted_dl_link}'). Marking as FAILED_ON_JOB.")
                     await track_db_handler.update_track_download_link(track_page_link, "FAILED_ON_JOB") 
-                    logger.warning(f"Job: Failed to extract download link for track ID {track_id} (link: {track_page_link}). Marked as FAILED_ON_JOB.")
                 
                 await asyncio.sleep(DELAY_BETWEEN_DOWNLOAD_PROCESSING_S) 
             
-            logger.info(f"Job: Download link extraction phase finished. Successfully extracted/updated {successful_link_extractions} links.")
+            logger.info(f"Job: Download link extraction/update phase finished. Successfully updated {successful_link_updates_this_run} links in this run.")
 
     except Exception as e:
-        logger.error(f"Job: Error during download link extraction phase: {e}", exc_info=True)
+        logger.error(f"Job: EXCEPTION during download link extraction/update phase: {e}", exc_info=True)
     
-    logger.info("Job: FULL music processing job finished.")
+    logger.info("Job: FULL music processing job COMPLETED.")
 
 
 async def run_user_notification_job(context: ContextTypes.DEFAULT_TYPE):
@@ -140,7 +158,7 @@ async def run_user_notification_job(context: ContextTypes.DEFAULT_TYPE):
             
             current_sent_music_for_user = set(user_data.get("sent_music", []))
             tracks_to_send_to_this_user_in_batch = []
-            # processed_links_for_this_user_in_batch = set() # از track_searcher انتظار می‌رود یونیک برگرداند
+
 
             for track in found_tracks:
                 download_link = track.get("download_link")
