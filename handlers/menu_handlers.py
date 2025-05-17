@@ -11,7 +11,7 @@ from music_bot.utils.keyboards import (main_menu_keyboard, list_menu_keyboard, e
                                         confirm_remove_list_keyboard, add_singer_keyboard,
                                         delete_singer_keyboard)
 from music_bot.handlers.helper_handlers import show_user_singers_list
-# from music_bot.utils.message_utils import ... # دیگر استفاده نمی‌شود
+from music_bot.utils.message_utils import send_reply_message # برای پیام‌های ساده
 
 
 # --- ثابت‌های تاخیر ---
@@ -166,31 +166,48 @@ async def manual_request_worker(application: Application):
 
 # --- هندلر دکمه "دریافت آهنگ‌های جدید" ---
 async def receive_music_now_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Handles the 'Receive Music Now' button.
+    Adds the user's request to a global queue for sequential processing.
+    پیام‌های قبلی را حذف یا ویرایش نمی‌کند.
+    """
     user = update.effective_user
-    chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id # برای استفاده احتمالی در لاگ‌ها یا ارسال مستقیم
 
     queue: asyncio.Queue = context.bot_data.get('manual_request_queue')
     if not queue:
         logger.error(f"Manual request queue not found for user {user.id}. Cannot queue request.")
-        await update.message.reply_text(USER_MESSAGES["error_services_unavailable"], reply_markup=main_menu_keyboard())
+        # ارسال پیام خطا با کیبورد اصلی
+        await update.message.reply_text(
+            USER_MESSAGES["error_services_unavailable"], 
+            reply_markup=main_menu_keyboard()
+        )
         return MAIN_MENU
 
     logger.info(f"User {user.id} ({user.username or 'N/A'}) pressed '{KEYBOARD_TEXTS['receive_music_now']}'. Adding to queue.")
     
+    # دیگر نیازی به حذف پیام منوی اصلی قبلی نیست، چون حالت ساده‌تری داریم.
+
     try:
         await queue.put({'user_id': user.id, 'chat_id': chat_id})
-        await update.message.reply_text(USER_MESSAGES["manual_fetch_queued"], reply_markup=main_menu_keyboard())
+        # ارسال پیام "در صف قرار گرفت" با کیبورد اصلی
+        await update.message.reply_text(
+            USER_MESSAGES["manual_fetch_queued"], 
+            reply_markup=main_menu_keyboard()
+        )
     except Exception as e:
         logger.error(f"Error adding request to manual queue for user {user.id}: {e}")
-        await update.message.reply_text(USER_MESSAGES["error_generic"], reply_markup=main_menu_keyboard())
+        # ارسال پیام خطا با کیبورد اصلی
+        await update.message.reply_text(
+            USER_MESSAGES["error_generic"], 
+            reply_markup=main_menu_keyboard()
+        )
     
     return MAIN_MENU # کاربر در منوی اصلی باقی می‌ماند
 
 
-# --- List Menu Handlers ---
 async def list_menu_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # دیگر پیام قبلی را حذف نمی‌کنیم
-    await show_user_singers_list(update, context) # این خودش پیام می‌دهد
+    await show_user_singers_list(update, context) # این از send_reply_message استفاده می‌کند
     await update.message.reply_text(USER_MESSAGES["list_menu_prompt"], reply_markup=list_menu_keyboard())
     return LIST_MENU
 
@@ -344,11 +361,10 @@ async def cancel_remove_list_handler(update: Update, context: ContextTypes.DEFAU
     return await list_menu_prompt_handler(update, context)
 
 
-# --- Navigation Handlers ---
 async def back_to_main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # پیام خوشامدگویی کامل فقط در /start. اینجا پیام بازگشت ساده‌تر.
     await update.message.reply_text(USER_MESSAGES["main_menu_return"], reply_markup=main_menu_keyboard())
     return MAIN_MENU
+
 
 async def back_to_list_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await list_menu_prompt_handler(update, context)
