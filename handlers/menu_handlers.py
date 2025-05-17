@@ -211,7 +211,6 @@ async def save_singer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(parts) > 1 and parts[1].strip().isdigit():
         count_val = int(parts[1].strip())
         if count_val <= 0: count = 1
-        elif count_val > 10: count = 10
         else: count = count_val
     
     all_singers_list: list[str] = context.bot_data.get('all_singer_names_list', [])
