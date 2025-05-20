@@ -1,7 +1,28 @@
+# nixpacks.toml
+
+[phases.setup]
+nixPkgs = ["python310", "playwright-driver"] # یا نسخه پایتون شما
+
+# [phases.build]
+# Nixpacks باید به طور خودکار pip install -r requirements.txt را اینجا اجرا کند
+# اگر requirements.txt وجود داشته باشد.
 
 [phases.install]
+# دستورات در این بخش بعد از نصب خودکار وابستگی‌ها توسط Nixpacks اجرا می‌شوند.
+# اما برای اطمینان بیشتر، pip install را اینجا هم می‌آوریم.
 cmds = [
-
-    "playwright install chromium", # فقط کرومیوم را برای تست سریعتر نصب کن
-
+    "echo '>>>>>>>>>>>>> STARTING INSTALL PHASE CMDS <<<<<<<<<<<<<<'",
+    "pip install -r requirements.txt", # یا "pip install playwright" اگر requirements.txt ندارید یا می‌خواهید مطمئن شوید
+    "echo 'Finished pip install. Checking playwright command...'",
+    "which playwright", # ببینیم playwright در PATH هست یا نه
+    # معمولا playwright در /opt/venv/bin/playwright نصب می‌شود اگر از محیط مجازی پیش‌فرض Nixpacks استفاده شود
+    # بنابراین، می‌توانیم مسیر کامل را هم برای اجرا استفاده کنیم:
+    "echo 'Attempting to run playwright install using potentially full path...'",
+    "/opt/venv/bin/playwright install chromium", # استفاده از مسیر کامل برای اطمینان بیشتر
+    # یا اگر which playwright مسیر دیگری را نشان داد، از آن مسیر استفاده کنید.
+    # یا فقط "playwright install chromium" اگر مطمئن هستید در PATH است.
+    "echo 'Finished attempting playwright install.'"
 ]
+
+[start]
+cmd = "python main.py"
