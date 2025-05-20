@@ -268,7 +268,7 @@ async def starlette_startup():
         
         # تنظیم وب‌هوک پس از راه‌اندازی PTB application
         if bot_instance.application and bot_instance.application.bot:
-            webhook_path = f"{TOKEN}" # مسیر وب‌هوک باید با مسیر در Starlette یکی باشد
+            webhook_path = f"/{TOKEN}" # مسیر وب‌هوک باید با مسیر در Starlette یکی باشد
             full_webhook_url = f"https://{WEBHOOK_DOMAIN}{webhook_path}"
             logger.info(f"Starlette Lifespan: Attempting to set webhook to: {full_webhook_url}")
             try:
