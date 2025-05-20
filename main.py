@@ -185,18 +185,26 @@ class MusicBot:
         if request.method == "POST":
             try:
                 update_json = await request.json()
-                update = Update.de_json(update_json)
-                if self.application:
-                    await self.application.process_update(update)
-                    return web.Response(text="OK", status=200)
+                # --- تغییر در این خط ---
+                if self.application and self.application.bot: # اضافه کردن یک بررسی برای اطمینان
+                    update = Update.de_json(data=update_json, bot=self.application.bot) # پاس دادن self.application.bot
                 else:
-                    logger.error("Application object is None in webhook handler.")
-                    return web.Response(text="Internal Server Error", status=500)
+                    logger.error("Application or application.bot is None in webhook handler. Cannot deserialize update.")
+                    return web.Response(text="Internal Server Error: Bot not ready", status=500)
+                # --- پایان تغییر ---
+
+                if self.application: # این بررسی دیگر لازم نیست چون در بالا انجام شد اما ضرری ندارد
+                    await self.application.process_update(update)
+                    logger.debug("Webhook update processed via application.process_update().")
+                    return web.Response(text="OK", status=200)
+                # else: # این بخش دیگر لازم نیست
+                #     logger.error("Application object is None in webhook handler. Cannot process update.")
+                #     return web.Response(text="Internal Server Error: Application not ready", status=500)
             except Exception as e:
                 logger.error(f"Error processing webhook update: {e}", exc_info=True)
                 return web.Response(text="Error processing update", status=500)
+        logger.warning(f"Webhook received non-POST request: {request.method}")
         return web.Response(text="Only POST requests are allowed", status=405)
-
     async def _health_check(self, request: web.Request) -> web.Response:
         logger.debug("Health check endpoint was pinged.")
         return web.Response(text="MusicBot is alive! (Webhook mode enforced)", status=200)
