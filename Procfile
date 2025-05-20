@@ -1,1 +1,0 @@
-web: uvicorn main:create_aiohttp_app --host 0.0.0.0 --port $PORT --factory --workers 1
