@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 # --- تنظیمات عمومی ---
 # توکن بات را فقط از متغیر محیطی بخوانید
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "6738356391:AAEIYgvmIQv1xa4pSmaqFy70zSDDpl6Ed_w") # مقدار پیش‌فرض برای تست
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") # مقدار پیش‌فرض برای تست
 if not TOKEN or TOKEN == "YOUR_BOT_TOKEN_HERE": # اگر پیش‌فرض استفاده شد یا مقدار env خالی بود
     logging.critical("FATAL: TELEGRAM_BOT_TOKEN environment variable not set or is default! Please set it in Railway.")
     # در محیط production، اگر توکن معتبر نباشد، بهتر است برنامه متوقف شود.
