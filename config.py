@@ -3,132 +3,133 @@ import os
 from logging.handlers import RotatingFileHandler
 
 # --- تنظیمات عمومی ---
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN",
-                  "6738356391:AAEIYgvmIQv1xa4pSmaqFy70zSDDpl6Ed_w")
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_NAME = os.path.join(BASE_DIR, "users.db")
-TRACK_DB_NAME = os.path.join(BASE_DIR, "tracks.db")
-LOG_DIR = os.path.join(BASE_DIR, "logs")
+# توکن بات را فقط از متغیر محیطی بخوانید
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "6738356391:AAEIYgvmIQv1xa4pSmaqFy70zSDDpl6Ed_w")
+if not TOKEN:
+    # اگر توکن در متغیرهای محیطی نبود، برنامه نباید اجرا شود
+    # می‌توانید یک مقدار پیش‌فرض برای تست لوکال بگذارید، اما برای production باید از env خوانده شود
+    logging.critical("FATAL: TELEGRAM_BOT_TOKEN environment variable not set!")
+    # raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set!") # یا یک خطا ایجاد کنید
+
+# مسیرهای فایل (با فرض اینکه برنامه در ریشه یک پوشه در کانتینر اجرا می‌شود)
+# برای داده‌های پایدار در Railway، از Volume استفاده کنید و این مسیر را به مسیر Volume تغییر دهید
+# به عنوان مثال، اگر Volume شما روی /data مانت شده است:
+# APP_DATA_DIR = os.getenv("APP_DATA_DIR", "/data")
+# اگر از Volume استفاده نمی‌کنید (فقط برای تست، چون داده‌ها موقتی خواهند بود):
+APP_DATA_DIR = os.getenv("APP_DATA_DIR", os.getcwd()) # os.getcwd() پوشه کاری فعلی است
+
+DB_NAME = os.path.join(APP_DATA_DIR, "users.db")
+TRACK_DB_NAME = os.path.join(APP_DATA_DIR, "tracks.db")
+LOG_DIR = os.path.join(APP_DATA_DIR, "logs") # پوشه لاگ
 LOG_FILE_NAME = "bot.log"
 LOG_FILE_PATH = os.path.join(LOG_DIR, LOG_FILE_NAME)
 
-# آدرس و پورت
-REPLIT_HOST_SLUG = os.getenv("REPL_SLUG", "music-bot")
-REPLIT_OWNER_USERNAME = os.getenv("REPL_OWNER", "rezar3124")
+# اطمینان از وجود پوشه لاگ (و پوشه داده اگر لازم است)
+if not os.path.exists(APP_DATA_DIR) and APP_DATA_DIR != os.getcwd(): # اگر APP_DATA_DIR یک مسیر خاص است
+    try:
+        os.makedirs(APP_DATA_DIR, exist_ok=True)
+    except OSError as e:
+        logging.error(f"Could not create data directory {APP_DATA_DIR}: {e}")
 
-# اگر REPL_SLUG به درستی تنظیم نشده، مقدار دستی را استفاده کن
-# نام Repl خود را اینجا وارد کنید (مطابق با URL Repl شما)
-EXPECTED_REPL_NAME = "music-bot"  # <--- نام Repl خود را اینجا جایگزین کنید
-
-if REPLIT_HOST_SLUG and REPLIT_HOST_SLUG != "workspace" and REPLIT_OWNER_USERNAME:
-    WEBHOOK_DOMAIN = f"{REPLIT_HOST_SLUG}.{REPLIT_OWNER_USERNAME}.replit.dev"
-elif EXPECTED_REPL_NAME and REPLIT_OWNER_USERNAME:
-    logging.warning(
-        f"REPL_SLUG was '{REPLIT_HOST_SLUG}', using hardcoded fallback: '{EXPECTED_REPL_NAME}'"
-    )
-    WEBHOOK_DOMAIN = f"{EXPECTED_REPL_NAME}.{REPLIT_OWNER_USERNAME}.replit.dev"
-else:
-    WEBHOOK_DOMAIN = None
-    logging.warning(
-        "Could not determine WEBHOOK_DOMAIN from environment variables or fallback."
-    )
-
-PORT = int(os.getenv("PORT", 8080))  # Replit معمولا پورت را خودش تنظیم می‌کند
-# ایجاد پوشه لاگ اگر وجود نداشته باشد
 if not os.path.exists(LOG_DIR):
-    os.makedirs(LOG_DIR)
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+    except OSError as e:
+        logging.error(f"Could not create log directory {LOG_DIR}: {e}")
 
-# --- وضعیت‌های مکالمه ---
+
+# --- دامنه وب‌هوک و پورت ---
+# WEBHOOK_DOMAIN را فقط از متغیر محیطی بخوانید (که در Railway تنظیم خواهید کرد)
+WEBHOOK_DOMAIN = os.getenv("WEBHOOK_DOMAIN")
+APP_ENV = os.getenv('APP_ENV', 'DEVELOPMENT').upper() # 'PRODUCTION' در Railway
+
+if not WEBHOOK_DOMAIN and APP_ENV == 'PRODUCTION':
+    logging.critical("CRITICAL: WEBHOOK_DOMAIN environment variable not set for PRODUCTION environment!")
+elif WEBHOOK_DOMAIN:
+    logging.info(f"WEBHOOK_DOMAIN set to: {WEBHOOK_DOMAIN} (from environment variable)")
+else:
+    logging.info("WEBHOOK_DOMAIN is not set (e.g., local development with polling, or env var missing).")
+
+# پورت را از متغیر محیطی بخوانید (Railway این را تنظیم می‌کند)
+PORT = int(os.getenv("PORT", 8080)) # 8080 یک پیش‌فرض برای تست لوکال است
+
+
+# --- وضعیت‌های مکالمه (بدون تغییر) ---
 (MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER, DELETE_SINGER,
  REMOVE_LIST_CONFIRM, CONFIRM_SINGER_SUGGESTION,
- CONFIRM_DELETE_HISTORY) = range(8)  # تعداد کل وضعیت‌ها به ۸ افزایش یافت
+ CONFIRM_DELETE_HISTORY) = range(8)
 
-# --- محدودیت‌های سیستم ---
+# --- محدودیت‌های سیستم (بدون تغییر) ---
 MAX_TRACKS_IN_DB = 100000
 
-# --- تنظیمات لاگ‌گیری ---
+# --- تنظیمات لاگ‌گیری (بخش زیادی بدون تغییر، فقط اطمینان از استفاده از logger جدید) ---
 APP_LOGGER_NAME = "MusicBotLogger"
-APP_ENV = os.getenv('APP_ENV', 'DEVELOPMENT').upper()
 DEFAULT_LOG_LEVEL = logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO
-APP_LOG_LEVEL_STR = os.getenv('APP_LOG_LEVEL',
-                              logging.getLevelName(DEFAULT_LOG_LEVEL))
+APP_LOG_LEVEL_STR = os.getenv('APP_LOG_LEVEL', logging.getLevelName(DEFAULT_LOG_LEVEL))
 APP_LOG_LEVEL = logging.getLevelName(APP_LOG_LEVEL_STR.upper())
 DETAILED_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(process)d - %(threadName)s - %(message)s'
 SIMPLE_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 
 
-def setup_logger(logger_name=APP_LOGGER_NAME,
-                 level=APP_LOG_LEVEL,
-                 log_file_path=LOG_FILE_PATH):
-    """
-    پیکربندی لاگر اصلی برنامه با تنظیمات مشخص شده
-    
-    Args:
-        logger_name: نام لاگر
-        level: سطح لاگ‌گیری
-        log_file_path: مسیر فایل لاگ
-    
-    Returns:
-        یک نمونه از لاگر پیکربندی شده
-    """
+def setup_logger(logger_name=APP_LOGGER_NAME, level=APP_LOG_LEVEL, log_file_path=LOG_FILE_PATH):
     lg = logging.getLogger(logger_name)
     lg.setLevel(level)
-    lg.propagate = False
+    lg.propagate = False # جلوگیری از ارسال لاگ به ریشه
 
-    if not lg.hasHandlers():
-        # تنظیم handler برای فایل
-        file_formatter = logging.Formatter(DETAILED_FORMAT)
-        file_handler = RotatingFileHandler(log_file_path,
-                                           maxBytes=5 * 1024 * 1024,
-                                           backupCount=5,
-                                           encoding='utf-8')
-        file_handler.setFormatter(file_formatter)
-        file_handler.setLevel(level)
-        lg.addHandler(file_handler)
+    if not lg.handlers: # بررسی با lg.handlers به جای lg.hasHandlers() که ممکن است در برخی نسخه‌ها نباشد
+        # تنظیم handler برای فایل (فقط اگر مسیر قابل نوشتن باشد)
+        try:
+            # اطمینان از وجود پوشه لاگ قبل از ایجاد handler
+            log_dir_for_handler = os.path.dirname(log_file_path)
+            if not os.path.exists(log_dir_for_handler):
+                os.makedirs(log_dir_for_handler, exist_ok=True)
+
+            file_formatter = logging.Formatter(DETAILED_FORMAT)
+            file_handler = RotatingFileHandler(log_file_path,
+                                               maxBytes=5 * 1024 * 1024, # 5MB
+                                               backupCount=5,
+                                               encoding='utf-8')
+            file_handler.setFormatter(file_formatter)
+            file_handler.setLevel(level) # سطح لاگ فایل را هم تنظیم کن
+            lg.addHandler(file_handler)
+        except Exception as e:
+            # اگر ایجاد فایل لاگ ممکن نبود (مثلاً به خاطر مجوزها در محیط کانتینر بدون ولوم پایدار)
+            # فقط به کنسول لاگ کن
+            lg.error(f"Could not set up file logger at {log_file_path}: {e}. Logging to console only for file logs.")
+
 
         # تنظیم handler برای کنسول
         console_formatter = logging.Formatter(
-            SIMPLE_FORMAT if APP_ENV == 'PRODUCTION' else DETAILED_FORMAT)
-        stream_handler = logging.StreamHandler()
+            SIMPLE_FORMAT if APP_ENV == 'PRODUCTION' else DETAILED_FORMAT
+        )
+        stream_handler = logging.StreamHandler() # به stdout/stderr می‌فرستد
         stream_handler.setFormatter(console_formatter)
-        stream_handler.setLevel(logging.DEBUG if APP_ENV ==
-                                'DEVELOPMENT' else logging.INFO)
+        # سطح لاگ کنسول را می‌توان متفاوت تنظیم کرد، مثلاً برای production کمتر و برای dev بیشتر
+        stream_handler.setLevel(logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO)
         lg.addHandler(stream_handler)
-
     return lg
-
 
 # ایجاد نمونه لاگر اصلی برنامه
 logger = setup_logger()
 
-# تنظیم لاگرهای کتابخانه تلگرام
+# تنظیم لاگرهای کتابخانه تلگرام (بدون تغییر)
 TELEGRAM_LIB_LOGGER_HTTP = "httpx"
-TELEGRAM_LIB_LOGGER_API = "telegram.ext.Application"
+TELEGRAM_LIB_LOGGER_API = "telegram.ext.Application" # قبلاً telegram.bot بود، Application صحیح‌تر است
 TELEGRAM_LIB_LOGGER_CONV = "telegram.ext.ConversationHandler"
 TELEGRAM_LIB_LOGGER_CALLBACK = "telegram.ext.CallbackQueryHandler"
-PTB_LOG_LEVEL_STR = os.getenv(
-    'PTB_LOG_LEVEL', 'DEBUG' if APP_ENV == 'DEVELOPMENT' else 'WARNING')
+PTB_LOG_LEVEL_STR = os.getenv('PTB_LOG_LEVEL', 'DEBUG' if APP_ENV == 'DEVELOPMENT' else 'WARNING')
 PTB_LOG_LEVEL = logging.getLevelName(PTB_LOG_LEVEL_STR.upper())
 
-
 def configure_ptb_loggers(level):
-    """
-    پیکربندی لاگرهای کتابخانه python-telegram-bot
-    
-    Args:
-        level: سطح لاگ‌گیری برای لاگرهای PTB
-    """
     logging.getLogger(TELEGRAM_LIB_LOGGER_HTTP).setLevel(level)
     logging.getLogger(TELEGRAM_LIB_LOGGER_API).setLevel(level)
-    logging.getLogger(TELEGRAM_LIB_LOGGER_CONV).setLevel(
-        logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO)
-    logging.getLogger(TELEGRAM_LIB_LOGGER_CALLBACK).setLevel(
-        logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO)
+    logging.getLogger(TELEGRAM_LIB_LOGGER_CONV).setLevel(logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO)
+    logging.getLogger(TELEGRAM_LIB_LOGGER_CALLBACK).setLevel(logging.DEBUG if APP_ENV == 'DEVELOPMENT' else logging.INFO)
 
-
-# فعال‌سازی پیکربندی لاگرهای PTB
 configure_ptb_loggers(PTB_LOG_LEVEL)
-logger.info(f"Logger configured for APP_ENV: {APP_ENV}")
+logger.info(f"Logger configured for APP_ENV: {APP_ENV}. MusicBot config loaded.")
+logger.info(f"Database path: {DB_NAME}")
+logger.info(f"Log file path: {LOG_FILE_PATH}")
 
 # --- متن دکمه‌های صفحه کلید (فارسی با ایموجی) ---
 KEYBOARD_TEXTS = {
