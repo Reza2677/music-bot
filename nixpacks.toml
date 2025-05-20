@@ -1,6 +1,0 @@
-# nixpacks.toml
-[phases.setup]
-nixPkgs = ["...", "python310", "..."] # یا python311 و غیره
-
-[start]
-cmd = "python main.py"
