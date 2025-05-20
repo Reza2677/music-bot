@@ -1,8 +1,10 @@
-from telegram import Update, __version__ as TG_VER # برای لاگ کردن نسخه PTB
+# --- START OF FILE main.py ---
+
+from telegram import Update, __version__ as TG_VER
 try:
-    from telegram.ext import __version__ as PTB_VER # برای لاگ کردن نسخه PTB
+    from telegram.ext import __version__ as PTB_VER
 except ImportError:
-    PTB_VER = TG_VER # در نسخه‌های قدیمی‌تر، __version__ فقط در telegram.ext نبود
+    PTB_VER = TG_VER
 
 from telegram.ext import (Application, CommandHandler, MessageHandler, filters,
                           ContextTypes, ConversationHandler,
@@ -12,12 +14,11 @@ from aiohttp import web
 from config import (TOKEN, DB_NAME, TRACK_DB_NAME, logger, KEYBOARD_TEXTS,
                     MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER,
                     DELETE_SINGER, REMOVE_LIST_CONFIRM,
-                    CONFIRM_SINGER_SUGGESTION, CONFIRM_DELETE_HISTORY, APP_ENV,
-                    PORT, WEBHOOK_DOMAIN) # WEBHOOK_DOMAIN حالا از config خوانده می‌شود
+                    CONFIRM_SINGER_SUGGESTION, CONFIRM_DELETE_HISTORY,
+                    PORT, WEBHOOK_DOMAIN) # APP_ENV دیگر اینجا خوانده نمی‌شود
 
-import telegram # این import اگر جای دیگری استفاده نشده، شاید لازم نباشد مگر برای telegram.error
+import telegram
 
-# Importهای شما از پروژه (بدون تغییر)
 from database.user_db import DatabaseHandler
 from database.track_db import TrackDatabaseHandler
 from services.user_manager import UserManager
@@ -29,19 +30,15 @@ from handlers import job_handlers
 
 
 class MusicBot:
-    """
-    ربات اصلی موسیقی که مدیریت عملکرد و چرخه زندگی ربات را به عهده دارد.
-    """
     def __init__(self, token: str):
         self.token = token
-        self.application: Application | None = None # Type hint برای وضوح بیشتر
+        self.application: Application | None = None
         self.manual_request_queue: asyncio.Queue | None = None
         self.aiohttp_runner: web.AppRunner | None = None
         self.manual_request_worker_task: asyncio.Task | None = None
-        logger.info(f"MusicBot instance CREATED. APP_ENV: {APP_ENV}. PTB Version: {PTB_VER}")
+        logger.info(f"MusicBot instance CREATED. PTB Version: {PTB_VER}") # APP_ENV از لاگ حذف شد
 
     async def _initialize_bot_dependencies(self):
-        # این متد تقریباً بدون تغییر باقی می‌ماند، فقط ترتیب لاگ و بررسی job_queue
         logger.info(">>>>>>>> _initialize_bot_dependencies: ENTERED <<<<<<<<")
         if not self.application:
             logger.critical("_initialize_bot_dependencies: Application is not initialized. Cannot proceed.")
@@ -76,9 +73,6 @@ class MusicBot:
             )
             logger.info("_initialize_bot_dependencies: Manual request queue and worker task STARTED.")
 
-            # JobQueue باید پس از application.initialize() و قبل از application.start() مقداردهی شود
-            # بنابراین، فراخوانی _schedule_bot_jobs به متد run منتقل شده است.
-            # در اینجا فقط می‌توانیم یک لاگ بگذاریم اگر job_queue هنوز None باشد.
             if not self.application.job_queue:
                  logger.warning("_initialize_bot_dependencies: JobQueue is not yet available from application object.")
 
@@ -88,11 +82,8 @@ class MusicBot:
         logger.info(">>>>>>>> _initialize_bot_dependencies: EXITED SUCCESSFULLY <<<<<<<<")
 
     def _setup_handlers(self):
-        # این متد بدون تغییر باقی می‌ماند
-        # ... (کد کامل _setup_handlers شما) ...
         logger.info("_setup_handlers: Configuring all handlers...")
-
-        # تعریف گفتگوی اصلی منوها
+        # ... (کد کامل _setup_handlers شما بدون تغییر باقی می‌ماند) ...
         main_conv_handler = ConversationHandler(
             entry_points=[
                 CommandHandler("start", command_handlers.start_command)
@@ -175,8 +166,6 @@ class MusicBot:
             logger.error(
                 "_setup_handlers: Application not initialized for Main Conversation handler."
             )
-
-        # گفتگوی جداگانه برای حذف تاریخچه
         delete_history_conv_handler = ConversationHandler(
             entry_points=[
                 CommandHandler("delete_history",
@@ -194,8 +183,8 @@ class MusicBot:
             ],
             name="delete_history_conversation",
             persistent=False,
-            per_user=True,  # حفظ user_data جداگانه برای هر کاربر
-            per_chat=True  # حفظ chat_data جداگانه برای هر گفتگو
+            per_user=True,
+            per_chat=True
         )
 
         if self.application:
@@ -210,10 +199,9 @@ class MusicBot:
 
 
     def _schedule_bot_jobs(self, job_queue):
-        # این متد بدون تغییر باقی می‌ماند
+        # ... (کد کامل _schedule_bot_jobs شما بدون تغییر باقی می‌ماند) ...
         logger.info("_schedule_bot_jobs: Scheduling...")
         if job_queue:
-            # تاخیر اولیه برای job ها برای اطمینان از راه‌اندازی کامل سایر بخش‌ها
             job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=60, name="MusicDataProcessingJob")
             logger.info("_schedule_bot_jobs: Music data processing job SCHEDULED.")
             job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86900, first=120, name="DailyUserNotificationJob")
@@ -223,8 +211,7 @@ class MusicBot:
 
 
     async def shutdown_manual_worker(self):
-        # این متد بدون تغییر باقی می‌ماند
-        # ... (کد کامل shutdown_manual_worker شما) ...
+        # ... (کد کامل shutdown_manual_worker شما بدون تغییر باقی می‌ماند) ...
         logger.info(
             "shutdown_manual_worker: Attempting to shutdown manual worker...")
         if self.manual_request_queue and self.manual_request_worker_task and not self.manual_request_worker_task.done(
@@ -277,12 +264,12 @@ class MusicBot:
             logger.info("shutdown_manual_worker: No worker task to shut down.")
 
     async def _handle_telegram_webhook(self, request: web.Request) -> web.Response:
-        # این متد بدون تغییر باقی می‌ماند (با استفاده از process_update)
+        # ... (کد کامل _handle_telegram_webhook شما بدون تغییر باقی می‌ماند) ...
         logger.debug(f"Webhook received a request. Method: {request.method}")
         if request.method == "POST":
             try:
                 update_json = await request.json()
-                update = Update.de_json(update_json) # حذف bot از پارامترها
+                update = Update.de_json(update_json)
 
                 if self.application:
                     await self.application.process_update(update)
@@ -297,23 +284,24 @@ class MusicBot:
         logger.warning(f"Webhook received non-POST request: {request.method}")
         return web.Response(text="Only POST requests are allowed", status=405)
 
+
     async def _health_check(self, request: web.Request) -> web.Response:
-        # این متد بدون تغییر باقی می‌ماند
+        # ... (کد کامل _health_check شما بدون تغییر باقی می‌ماند) ...
         logger.debug("Health check endpoint was pinged.")
-        return web.Response(text=f"MusicBot is alive! APP_ENV: {APP_ENV}", status=200)
+        return web.Response(text=f"MusicBot is alive! (Webhook mode enforced)", status=200) # پیام تغییر کرد
+
 
     async def run(self):
         logger.info(f"run: Attempting to start bot with token: {'***' + self.token[-6:] if self.token and len(self.token) > 6 else 'TOKEN_NOT_SET_OR_TOO_SHORT'}")
 
-        if not self.token: # این بررسی در config.py هم هست، اما اینجا هم خوب است
-            logger.critical("run: Bot TOKEN is not set (read from env). Aborting.")
+        if not self.token or TOKEN == "YOUR_BOT_TOKEN_HERE": # بررسی TOKEN از config
+            logger.critical("run: Bot TOKEN is not set or is default. Aborting.")
             return
 
-        # WEBHOOK_DOMAIN از config.py خوانده می‌شود
-        if APP_ENV == "PRODUCTION" and not WEBHOOK_DOMAIN:
-            logger.critical("run: WEBHOOK_DOMAIN is not set in config for PRODUCTION environment. Aborting webhook setup.")
-            # در این حالت، برنامه باید متوقف شود یا به حالت polling برود (که اینجا پیاده‌سازی نشده)
-            return
+        # WEBHOOK_DOMAIN حالا باید همیشه در config.py مقدار داشته باشد (یا برنامه قبلاً خارج شده)
+        if not WEBHOOK_DOMAIN:
+            logger.critical("run: WEBHOOK_DOMAIN is not set in config. Aborting webhook setup.")
+            return # یا raise خطا
 
         try:
             logger.info("run: Building application...")
@@ -333,72 +321,69 @@ class MusicBot:
             self._setup_handlers()
             logger.info("run: Handlers SET UP.")
 
-            # --- بخش مربوط به وب‌هوک و وب سرور ---
-            webhook_path = f"/{self.token}" # مسیر وب‌هوک (محرمانه)
-
+            webhook_path = f"/{self.token}"
             web_server = web.Application()
             web_server.router.add_post(webhook_path, self._handle_telegram_webhook)
-            web_server.router.add_get("/", self._health_check)
+            web_server.router.add_get("/", self._health_check) # Health check در روت اصلی
 
             self.aiohttp_runner = web.AppRunner(web_server)
             await self.aiohttp_runner.setup()
-            site = web.TCPSite(self.aiohttp_runner, host="0.0.0.0", port=PORT) # PORT از config.py
+            site = web.TCPSite(self.aiohttp_runner, host="0.0.0.0", port=PORT)
             await site.start()
             logger.info(f"Web server started on 0.0.0.0:{PORT}. Health check on '/', Webhook on '{webhook_path}'")
 
-            # ---- تنظیم نهایی وب‌هوک (دیگر کد موقتی برای نادیده گرفتن خطا نداریم) ----
-            if APP_ENV == "PRODUCTION" and WEBHOOK_DOMAIN: # فقط در production و اگر دامنه داریم
-                full_webhook_url = f"https://{WEBHOOK_DOMAIN}{webhook_path}"
-                logger.info(f"run: Attempting to set webhook to: {full_webhook_url}")
-                try:
-                    # قبل از ست کردن، هر وب‌هوک قبلی را پاک می‌کنیم
-                    await self.application.bot.delete_webhook(drop_pending_updates=True)
-                    logger.info("run: Attempted to delete any existing webhook.")
+            # --- تنظیم وب‌هوک (همیشه انجام می‌شود اگر WEBHOOK_DOMAIN موجود باشد) ---
+            full_webhook_url = f"https://{WEBHOOK_DOMAIN}{webhook_path}"
+            logger.info(f"run: Attempting to set webhook to: {full_webhook_url}")
+            try:
+                await self.application.bot.delete_webhook(drop_pending_updates=True)
+                logger.info("run: Attempted to delete any existing webhook.")
 
-                    await self.application.bot.set_webhook(
-                        url=full_webhook_url,
-                        allowed_updates=Update.ALL_TYPES,
-                        # می‌توانید پارامترهای دیگری مانند max_connections, ip_address و ... را هم بررسی کنید
-                    )
-                    logger.info("run: >>>>>>> Webhook SET successfully! Bot should be operational. <<<<<<<")
-                except telegram.error.BadRequest as e_bad_request:
-                    logger.critical(f"run: FAILED to set webhook (BadRequest): {e_bad_request}. Bot will likely not work. Check DNS and URL.")
-                    # در این حالت، برنامه باید متوقف شود یا به حالت خطا برود
-                    # فعلاً اجازه می‌دهیم برنامه ادامه پیدا کند اما وب‌هوک کار نخواهد کرد
-                    # raise # <--- برای توقف برنامه در صورت شکست حیاتی وب‌هوک، این را از کامنت خارج کنید
-                except Exception as e_webhook:
-                    logger.critical(f"run: An UNEXPECTED CRITICAL error occurred while setting webhook: {e_webhook}. Bot will likely not work.", exc_info=True)
-                    # raise # <--- برای توقف برنامه
-            elif APP_ENV == "PRODUCTION" and not WEBHOOK_DOMAIN:
-                logger.error("run: In PRODUCTION but WEBHOOK_DOMAIN is not configured. Bot will not use webhook.")
-            else: #  APP_ENV != "PRODUCTION"
-                logger.info(f"run: Not in PRODUCTION environment (APP_ENV: {APP_ENV}) or WEBHOOK_DOMAIN not set. Skipping webhook setup. Bot might use polling if run_polling is called.")
+                await self.application.bot.set_webhook(
+                    url=full_webhook_url,
+                    allowed_updates=Update.ALL_TYPES,
+                )
+                logger.info("run: >>>>>>> Webhook SET successfully! Bot should be operational. <<<<<<<")
+            except telegram.error.BadRequest as e_bad_request:
+                logger.critical(f"run: FAILED to set webhook (BadRequest): {e_bad_request}. Bot will likely not work. Check DNS and URL for {WEBHOOK_DOMAIN}.")
+                # در این حالت، شاید بهتر باشد برنامه متوقف شود
+                # raise # <--- برای توقف
+            except Exception as e_webhook:
+                logger.critical(f"run: An UNEXPECTED CRITICAL error occurred while setting webhook: {e_webhook}. Bot will likely not work.", exc_info=True)
+                # raise # <--- برای توقف
 
-
-            # JobQueue Scheduling (بعد از initialize و قبل از start)
             if self.application.job_queue:
                 self._schedule_bot_jobs(self.application.job_queue)
-            else: # این لاگ از _initialize_bot_dependencies هم ممکن است بیاید
-                logger.error("run: JobQueue is still not available after application.initialize(). Jobs cannot be scheduled.")
+            else:
+                logger.error("run: JobQueue is not available after application.initialize(). Jobs cannot be scheduled.")
 
             logger.info("run: Starting application (dispatcher)...")
-            await self.application.start() # این دیسپچر را برای پردازش از صف راه‌اندازی می‌کند
+            await self.application.start()
             logger.info("run: Application dispatcher STARTED.")
 
-            if APP_ENV == "PRODUCTION" and WEBHOOK_DOMAIN:
-                logger.info(f"run: Bot is ALIVE and listening for webhook updates on https://{WEBHOOK_DOMAIN}{webhook_path}")
-                logger.info(f"run: Health check available at https://{WEBHOOK_DOMAIN}/")
-            else:
-                logger.info(f"run: Bot is ALIVE. Webhook not configured for Telegram. Health check may be available locally or via internal IP if web server is running.")
-                logger.warning("run: If you intend to use polling for local development, you would need to call a polling method here instead of relying on webhook.")
+            logger.info(f"run: Bot is ALIVE and listening for webhook updates on https://{WEBHOOK_DOMAIN}{webhook_path}")
+            logger.info(f"run: Health check available at https://{WEBHOOK_DOMAIN}/")
 
-
-            # حلقه اصلی برای زنده نگه داشتن برنامه
             stop_event = asyncio.Event()
-            # سیگنال SIGINT (Ctrl+C) و SIGTERM برای خاموش کردن صحیح
             loop = asyncio.get_event_loop()
-            for sig in (asyncio.signal.SIGINT, asyncio.signal.SIGTERM): # Python 3.9+
-                 loop.add_signal_handler(sig, stop_event.set)
+            # استفاده از signal برای خاموش شدن صحیح (اگر پایتون >= 3.8/3.9)
+            # این بخش را می‌توانید نگه دارید یا اگر در محیط Railway با آن مشکل دارید، موقتاً حذف کنید
+            # و به Ctrl+C در لاگ‌ها یا دستور stop از Railway اکتفا کنید.
+            # در لینوکس معمولاً کار می‌کند.
+            import signal as os_signal
+            def _signal_handler_main(signum, frame):
+                logger.info(f"OS Signal {signum} received in main run, setting stop_event.")
+                if not stop_event.is_set():
+                    if loop.is_running():
+                         loop.call_soon_threadsafe(stop_event.set)
+                    else:
+                        stop_event.set()
+            try:
+                loop.add_signal_handler(os_signal.SIGINT, lambda: _signal_handler_main(os_signal.SIGINT, None))
+                loop.add_signal_handler(os_signal.SIGTERM, lambda: _signal_handler_main(os_signal.SIGTERM, None))
+            except RuntimeError as e_signal_main:
+                logger.warning(f"Could not add signal handlers directly in main run: {e_signal_main}")
+
 
             await stop_event.wait()
             logger.info("run: Stop event received, initiating shutdown sequence...")
@@ -410,36 +395,29 @@ class MusicBot:
         finally:
             logger.info("run: Initiating FINALLY block for graceful shutdown...")
 
-            if self.application and self.application.running: # بررسی اینکه آیا اپلیکیشن در حال اجراست
+            if self.application and self.application.running:
                 logger.info("run: Stopping PTB application dispatcher...")
                 await self.application.stop()
             elif self.application and not self.application.running:
                  logger.info("run: PTB application was not running or already stopped.")
 
-
             await self.shutdown_manual_worker()
 
-            if self.application and self.application.initialized: # بررسی اینکه آیا اپلیکیشن مقداردهی اولیه شده
+            if self.application: # دیگر نیازی به چک کردن .initialized نیست چون بعد از stop()، shutdown() همیشه باید صدا زده شود
                 logger.info("run: Shutting down PTB application...")
                 await self.application.shutdown()
 
-            # توقف وب سرور aiohttp باید بعد از خاموش شدن PTB باشد اگر PTB از آن استفاده می‌کند (که اینجا نمی‌کند)
-            # اما برای پاکسازی کلی، اینجا خوب است
             if self.aiohttp_runner:
                 logger.info("run: Cleaning up aiohttp web server...")
                 await self.aiohttp_runner.cleanup()
                 logger.info("run: aiohttp web server CLEANED UP.")
 
-            # حذف وب‌هوک در انتها، پس از خاموش شدن کامل برنامه
-            # این کار را می‌کنیم تا اگر برنامه به سرعت ری‌استارت شود، وب‌هوک قبلی تداخل ایجاد نکند
-            # اما اگر برنامه برای همیشه خاموش می‌شود، حذف وب‌هوک خوب است
-            if self.application and self.application.bot and WEBHOOK_DOMAIN and APP_ENV == "PRODUCTION":
+            if self.application and self.application.bot and WEBHOOK_DOMAIN: # همیشه سعی در حذف وب‌هوک می‌کنیم
                 try:
                     logger.info("run: Final attempt to delete webhook...")
-                    # برای اطمینان، یک شی Bot جدید می‌سازیم چون application ممکن است shutdown شده باشد
                     temp_bot = telegram.Bot(token=self.token)
                     await temp_bot.delete_webhook(drop_pending_updates=True)
-                    await temp_bot.shutdown() # بستن سشن‌های http موقت Bot
+                    await temp_bot.shutdown()
                     logger.info("run: Webhook DELETED (final attempt).")
                 except Exception as e_wh_del_final:
                     logger.error(f"run: Error deleting webhook during final shutdown: {e_wh_del_final}")
@@ -448,19 +426,13 @@ class MusicBot:
 
 
 def main() -> None:
-    """
-    تابع اصلی برنامه که نقطه شروع اجرا است
-    """
-    # TOKEN حالا از config.py خوانده می‌شود و اگر نباشد، config.py لاگ بحرانی می‌دهد
-    if not TOKEN:
-        # این لاگ اضافی است چون config.py هم لاگ می‌دهد، اما برای اطمینان
-        logger.critical("main: TOKEN is not available (either not in env or config failed). Exiting.")
+    if not TOKEN or TOKEN == "YOUR_BOT_TOKEN_HERE":
+        logger.critical("main: TOKEN is not available or is default (checked from config). Exiting.")
         return
 
-    logger.info(f"main: Creating MusicBot instance for APP_ENV: {APP_ENV}...")
+    logger.info(f"main: Creating MusicBot instance (Webhook mode enforced)...") # پیام تغییر کرد
     bot_instance = MusicBot(token=TOKEN)
 
-    # مدیریت صحیح‌تر حلقه رویداد و خاموش شدن
     loop = asyncio.get_event_loop()
     main_task = None
     try:
@@ -472,18 +444,17 @@ def main() -> None:
         if main_task and not main_task.done():
             logger.info("main: Cancelling main_task due to KeyboardInterrupt...")
             main_task.cancel()
-            # اجازه می‌دهیم تسک کنسل شده و finally بلاک در run اجرا شود
             try:
                 loop.run_until_complete(main_task)
             except asyncio.CancelledError:
                 logger.info("main: Main task was cancelled successfully after KeyboardInterrupt.")
-            except Exception as e_after_cancel: # گرفتن خطاهای احتمالی دیگر
+            except Exception as e_after_cancel:
                  logger.error(f"main: Exception after cancelling main_task: {e_after_cancel}", exc_info=True)
     except RuntimeError as e:
         if "cannot schedule new futures after shutdown" in str(e).lower() or \
            "Event loop is closed" in str(e).lower():
             logger.warning(f"main: Event loop was already shut down or closed: {e}")
-        elif "already running" in str(e).lower(): # این معمولاً در برخی محیط‌ها اتفاق می‌افتد
+        elif "already running" in str(e).lower():
             logger.warning("main: Event loop already running. This is unusual for a standalone script but might be okay in some contexts.")
         else:
             logger.critical(f"main: Unhandled RuntimeError in main: {e}", exc_info=True)
@@ -492,8 +463,6 @@ def main() -> None:
     finally:
         logger.info("main: Main function finally block. Ensuring event loop is closed if running.")
         if loop.is_running():
-            # قبل از بستن لوپ، تسک‌های باقی‌مانده را کنسل کنید
-            # این بخش برای جلوگیری از هشدارهای "task_was_destroyed_but_pending" است
             tasks = [t for t in asyncio.all_tasks(loop=loop) if t is not asyncio.current_task(loop=loop)]
             if tasks:
                 logger.info(f"main: Cancelling {len(tasks)} outstanding tasks before closing loop...")
@@ -513,7 +482,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # لاگر حالا در config.py مقداردهی اولیه می‌شود
     logger.info(f"__main__: Script starting (Python version: {PTB_VER.split('.')[0]}.{PTB_VER.split('.')[1]}.x, Full PTB: {PTB_VER}).")
     main()
     logger.info("__main__: Script finished.")
+
+# --- END OF FILE main.py ---
