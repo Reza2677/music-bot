@@ -1,0 +1,10 @@
+[phases.install]
+cmds = [
+    "echo '>>>>>>>>>>>>> EXECUTING INSTALL PHASE CMDS <<<<<<<<<<<<<<'", # یک پیام واضح
+    "pwd", # مسیر فعلی را چاپ کن
+    "which playwright", # چک کن آیا دستور playwright در PATH هست
+    "playwright --version", # اگر playwright نصب شده، این باید کار کند
+    "echo 'Attempting to run playwright install...'",
+    "playwright install chromium", # فقط کرومیوم را برای تست سریعتر نصب کن
+    "echo 'Finished attempting playwright install.'"
+]
