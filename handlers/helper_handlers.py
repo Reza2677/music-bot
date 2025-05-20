@@ -1,8 +1,8 @@
 from telegram import Update, constants
 from telegram.ext import ContextTypes
-from music_bot.services.user_manager import UserManager
-from music_bot.config import logger, USER_MESSAGES, KEYBOARD_TEXTS
-from music_bot.utils.message_utils import send_reply_message # <--- استفاده از تابع کمکی
+from services.user_manager import UserManager
+from config import logger, USER_MESSAGES, KEYBOARD_TEXTS
+from utils.message_utils import send_reply_message # <--- استفاده از تابع کمکی
 
 async def show_user_singers_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_manager: UserManager = context.bot_data.get('user_manager')

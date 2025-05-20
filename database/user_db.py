@@ -1,6 +1,6 @@
 import sqlite3
 import json
-from music_bot.config import logger # استفاده از لاگر مرکزی
+from config import logger # استفاده از لاگر مرکزی
 
 class DatabaseHandler:
     def __init__(self, db_name: str):

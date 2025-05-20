@@ -1,10 +1,10 @@
 from telegram.ext import ContextTypes
 from telegram.error import TelegramError # برای مدیریت خطاهای احتمالی تلگرام
-from music_bot.config import logger, MAX_TRACKS_IN_DB
-from music_bot.services.music_fetcher import MusicFetcher
-from music_bot.services.track_searcher import TrackSearcher
-from music_bot.services.user_manager import UserManager
-from music_bot.database.track_db import TrackDatabaseHandler
+from config import logger, MAX_TRACKS_IN_DB
+from services.music_fetcher import MusicFetcher
+from services.track_searcher import TrackSearcher
+from services.user_manager import UserManager
+from database.track_db import TrackDatabaseHandler
 import asyncio
 from datetime import datetime
 

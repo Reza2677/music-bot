@@ -3,7 +3,7 @@ import sqlite3
 import os
 import logging
 from contextlib import contextmanager
-from music_bot.config import logger # استفاده از لاگر مرکزی
+from config import logger # استفاده از لاگر مرکزی
 
 class TrackDatabaseHandler:
     def __init__(self, db_name: str):

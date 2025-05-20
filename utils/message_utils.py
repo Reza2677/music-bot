@@ -1,6 +1,6 @@
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
-from music_bot.config import logger # استفاده از لاگر مرکزی
+from config import logger # استفاده از لاگر مرکزی
 
 EDITABLE_MESSAGE_ID_KEY = 'last_menu_message_id' # این کلید را نگه می‌داریم برای استفاده احتمالی آینده
 

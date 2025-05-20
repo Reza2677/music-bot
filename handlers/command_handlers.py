@@ -1,8 +1,8 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler # ConversationHandler برای نوع‌دهی
-from music_bot.config import logger, MAIN_MENU, USER_MESSAGES, CONFIRM_DELETE_HISTORY # اضافه شدن CONFIRM_DELETE_HISTORY
-from music_bot.services.user_manager import UserManager
-from music_bot.utils.keyboards import main_menu_keyboard
+from config import logger, MAIN_MENU, USER_MESSAGES, CONFIRM_DELETE_HISTORY # اضافه شدن CONFIRM_DELETE_HISTORY
+from services.user_manager import UserManager
+from utils.keyboards import main_menu_keyboard
 # از message_utils برای سادگی استفاده نمی‌کنیم
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

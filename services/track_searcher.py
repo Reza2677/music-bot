@@ -1,6 +1,6 @@
 from typing import List, Dict
-from music_bot.config import logger
-from music_bot.database.track_db import TrackDatabaseHandler
+from config import logger
+from database.track_db import TrackDatabaseHandler
 # from music_bot.utils.helpers import is_english # is_english استفاده نشده است، فعلا کامنت می‌شود
 
 class TrackSearcher:

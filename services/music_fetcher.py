@@ -4,7 +4,7 @@
 
 import asyncio
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightAsyncTimeoutError
-from music_bot.config import logger # logger از config ربات
+from config import logger # logger از config ربات
 import time 
 import urllib.parse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightSyncTimeoutError # استفاده از sync_api و تغییر نام TimeoutError

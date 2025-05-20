@@ -1,5 +1,5 @@
-from music_bot.database.user_db import DatabaseHandler
-from music_bot.config import logger
+from database.user_db import DatabaseHandler
+from config import logger
 
 class UserManager:
     def __init__(self, db_handler: DatabaseHandler):

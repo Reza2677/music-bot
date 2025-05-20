@@ -1,5 +1,5 @@
 from telegram import ReplyKeyboardMarkup
-from music_bot.config import KEYBOARD_TEXTS # VALID_TIMES دیگر ایمپورت نمی‌شود
+from config import KEYBOARD_TEXTS # VALID_TIMES دیگر ایمپورت نمی‌شود
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(

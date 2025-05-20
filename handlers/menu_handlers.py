@@ -4,16 +4,16 @@ from telegram.error import TelegramError
 import asyncio
 from thefuzz import process as fuzzy_process
 
-from music_bot.config import (logger, MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER, CONFIRM_SINGER_SUGGESTION,
-                               DELETE_SINGER, REMOVE_LIST_CONFIRM, KEYBOARD_TEXTS, USER_MESSAGES, 
-                               FUZZY_MATCH_THRESHOLD, MAX_FUZZY_SUGGESTIONS)
-from music_bot.services.user_manager import UserManager
-from music_bot.services.track_searcher import TrackSearcher
-from music_bot.database.track_db import TrackDatabaseHandler # برای type hinting و فال‌بک
-from music_bot.utils.keyboards import (main_menu_keyboard, list_menu_keyboard, edit_list_keyboard,
-                                        confirm_remove_list_keyboard, add_singer_keyboard,
-                                        delete_singer_keyboard)
-from music_bot.handlers.helper_handlers import show_user_singers_list
+from config import (logger, MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER, CONFIRM_SINGER_SUGGESTION,
+                DELETE_SINGER, REMOVE_LIST_CONFIRM, KEYBOARD_TEXTS, USER_MESSAGES, 
+                FUZZY_MATCH_THRESHOLD, MAX_FUZZY_SUGGESTIONS)
+from services.user_manager import UserManager
+from services.track_searcher import TrackSearcher
+from database.track_db import TrackDatabaseHandler # برای type hinting و فال‌بک
+from utils.keyboards import (main_menu_keyboard, list_menu_keyboard, edit_list_keyboard,
+                         confirm_remove_list_keyboard, add_singer_keyboard,
+                         delete_singer_keyboard)
+from handlers.helper_handlers import show_user_singers_list
 
 # --- ثابت‌های تاخیر ---
 DELAY_BETWEEN_INDIVIDUAL_MANUAL_MESSAGES_S = 0.3
