@@ -143,7 +143,7 @@ class MusicBot:
     def _schedule_bot_jobs(self, job_queue):
         logger.info("_schedule_bot_jobs: Scheduling...")
         if job_queue:
-            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=30, name="MusicDataProcessingJob")
+            job_queue.run_repeating(job_handlers.run_music_processing_job, interval=86000, first=0, name="MusicDataProcessingJob")
             logger.info("_schedule_bot_jobs: Music data processing job SCHEDULED.")
             job_queue.run_repeating(job_handlers.run_user_notification_job, interval=86900, first=0, name="DailyUserNotificationJob")
             logger.info("_schedule_bot_jobs: Daily user notification job SCHEDULED.")
