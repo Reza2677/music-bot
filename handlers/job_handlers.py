@@ -6,6 +6,7 @@ from services.track_searcher import TrackSearcher
 from services.user_manager import UserManager
 from database.track_db import TrackDatabaseHandler
 import asyncio
+import gc  # Added for explicit garbage collection
 from datetime import datetime
 
 DELAY_BETWEEN_DOWNLOAD_PROCESSING_S = 2
@@ -68,6 +69,9 @@ async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Job: EXCEPTION during preview fetching/saving: {e}", exc_info=True)
     
+    # Force garbage collection after preview fetching
+    gc.collect()
+    
     # --- بخش ۲: واکشی و آپدیت لینک‌های دانلود برای آهنگ‌هایی که لینک معتبر ندارند ---
     logger.info("Job: Starting download link extraction/update part...")
     try:
@@ -118,6 +122,9 @@ async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
                     logger.warning(f"Job: Failed to extract a valid download link for track ID {track_id_for_log} (Extracted: '{extracted_dl_link}'). Marking as FAILED_ON_JOB.")
                     await track_db_handler.update_track_download_link(track_page_link, "FAILED_ON_JOB") 
                 
+                # Force garbage collection after each extraction to free memory
+                gc.collect()
+                
                 await asyncio.sleep(DELAY_BETWEEN_DOWNLOAD_PROCESSING_S) 
             
             logger.info(f"Job: Download link extraction/update phase finished. Successfully updated {successful_link_updates_this_run} links in this run.")
@@ -125,6 +132,8 @@ async def run_music_processing_job(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Job: EXCEPTION during download link extraction/update phase: {e}", exc_info=True)
     
+    # Final garbage collection to free memory
+    gc.collect()
     logger.info("Job: FULL music processing job COMPLETED.")
 
 
@@ -251,4 +260,6 @@ async def run_user_notification_job(context: ContextTypes.DEFAULT_TYPE):
                     user_manager.update_user_specific_data(user_id_str_processed, {"sent_music": final_sent_music_list})
             logger.info("Job: Finished updating sent_music after daily notifications.")
             
+    # Force garbage collection at the end
+    gc.collect()        
     logger.info("Job: Daily user notification process finished.")

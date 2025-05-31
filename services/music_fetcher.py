@@ -1,12 +1,13 @@
 # --- START OF FILE services/music_fetcher.py ---
 
 import asyncio
+import gc  # Added for explicit garbage collection
 from playwright.sync_api import sync_playwright, Error as PlaywrightError, TimeoutError as PlaywrightSyncTimeoutError
 from playwright.async_api import async_playwright, Error as PlaywrightAsyncError, TimeoutError as PlaywrightAsyncTimeoutError
 from config import logger
 import time
 import urllib.parse
-from typing import List, Dict, Optional, Tuple # اضافه کردن Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 # --- ثابت‌های مربوط به استخراج لینک دانلود ---
 DOWNLOAD_MAX_RETRIES = 2

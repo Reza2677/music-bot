@@ -2,6 +2,7 @@ from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKe
 from telegram.ext import ContextTypes, ConversationHandler, Application, CallbackQueryHandler
 from telegram.error import TelegramError
 import asyncio
+import gc  # Added for explicit garbage collection
 from thefuzz import process as fuzzy_process
 
 from config import (logger, MAIN_MENU, LIST_MENU, EDIT_LIST_MENU, ADD_SINGER, CONFIRM_SINGER_SUGGESTION,
@@ -22,40 +23,68 @@ DELAY_AFTER_PROCESSING_EACH_USER_MANUALLY_S = 1.0
 # --- تابع کارگر برای صف دستی (manual_request_worker) ---
 async def manual_request_worker(application: Application):
     queue: asyncio.Queue = application.bot_data.get('manual_request_queue')
-    if not queue: logger.critical("Worker: Manual request queue not found."); return
+    if not queue:
+        logger.critical("Worker: Manual request queue not found.")
+        return
+    
     logger.info("Worker: Started.")
+    
     while True:
         try:
             request_data = await queue.get()
-            if request_data is None: logger.info("Worker: Stop signal received."); queue.task_done(); break
+            if request_data is None:
+                logger.info("Worker: Stop signal received.")
+                queue.task_done()
+                break
+                
             user_id, chat_id = request_data.get('user_id'), request_data.get('chat_id')
-            if not (user_id and chat_id): logger.error(f"Worker: Invalid data: {request_data}"); queue.task_done(); continue
+            if not (user_id and chat_id):
+                logger.error(f"Worker: Invalid data: {request_data}")
+                queue.task_done()
+                continue
             
             user_id_str = str(user_id)
             logger.info(f"Worker: Processing for user {user_id_str}")
             
             user_manager: UserManager = application.bot_data.get('user_manager')
             track_searcher: TrackSearcher = application.bot_data.get('track_searcher')
+            music_fetcher: MusicFetcher = application.bot_data.get('music_fetcher')
             bot = application.bot
-            if not all([user_manager, track_searcher, bot]):
+            
+            if not all([user_manager, track_searcher, music_fetcher, bot]):
                 logger.error(f"Worker: Critical services missing for user {user_id_str}.")
-                try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_services_unavailable"])
-                except Exception: pass
-                queue.task_done(); continue
+                try:
+                    await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_services_unavailable"])
+                except Exception:
+                    pass
+                queue.task_done()
+                # Force cleanup
+                gc.collect()
+                continue
             
             user_data = user_manager.get_user(user_id_str)
             if not user_data:
                 logger.warning(f"Worker: User data not found for user {user_id_str}.")
-                try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_user_data_not_found"])
-                except Exception: pass
-                queue.task_done(); continue
+                try:
+                    await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_user_data_not_found"])
+                except Exception:
+                    pass
+                queue.task_done()
+                # Force cleanup
+                gc.collect()
+                continue
 
             preferred_singers = user_data.get("singer_names", [])
             if not preferred_singers:
                 logger.info(f"Worker: No preferred singers for user {user_id_str}.")
-                try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["no_singers_in_list_general"])
-                except Exception: pass
-                queue.task_done(); continue
+                try:
+                    await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["no_singers_in_list_general"])
+                except Exception:
+                    pass
+                queue.task_done()
+                # Force cleanup
+                gc.collect()
+                continue
             
             try:
                 found_tracks = await track_searcher.search_tracks_by_singer_list(preferred_singers)
@@ -74,9 +103,14 @@ async def manual_request_worker(application: Application):
                 
                 if not new_tracks_to_send:
                     logger.info(f"Worker: No new tracks found for user {user_id_str} to send.")
-                    try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["manual_fetch_no_new_songs"])
-                    except Exception: pass
-                    queue.task_done(); continue
+                    try:
+                        await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["manual_fetch_no_new_songs"])
+                    except Exception:
+                        pass
+                    queue.task_done()
+                    # Garbage collection after task completion
+                    gc.collect()
+                    continue
                     
                 successfully_sent_links = set()
                 num_total = len(new_tracks_to_send)
@@ -88,7 +122,10 @@ async def manual_request_worker(application: Application):
                 except TelegramError as e_init_send:
                     logger.warning(f"Worker: Could not send 'found tracks' message to user {user_id_str}: {e_init_send}")
                     if "bot was blocked by the user" in str(e_init_send).lower():
-                        queue.task_done(); continue 
+                        queue.task_done()
+                        # Garbage collection after task completion
+                        gc.collect()
+                        continue 
 
                 for i, track in enumerate(new_tracks_to_send):
                     singer_name = track.get('fa_name') or track.get('en_name', 'خواننده نامشخص')
@@ -102,14 +139,17 @@ async def manual_request_worker(application: Application):
                     try:
                         await bot.send_message(chat_id=chat_id, text=message_text)
                         successfully_sent_links.add(dl_link)
-                        num_sent_successfully +=1
-                        if i < num_total - 1: await asyncio.sleep(DELAY_BETWEEN_INDIVIDUAL_MANUAL_MESSAGES_S)
+                        num_sent_successfully += 1
+                        if i < num_total - 1:
+                            await asyncio.sleep(DELAY_BETWEEN_INDIVIDUAL_MANUAL_MESSAGES_S)
                     except TelegramError as te_send:
                         last_telegram_error_in_loop = te_send
                         logger.warning(f"Worker: TelegramError sending message #{i+1} to user {user_id_str}: {te_send}")
                         if "bot was blocked by the user" in str(te_send).lower(): 
-                            try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["manual_fetch_blocked"])
-                            except: pass
+                            try:
+                                await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["manual_fetch_blocked"])
+                            except:
+                                pass
                             break
                     except Exception as e_send_loop: 
                         logger.error(f"Worker: Error sending track {i+1} to {user_id_str}: {e_send_loop}", exc_info=True)
@@ -127,14 +167,20 @@ async def manual_request_worker(application: Application):
                     if not (last_telegram_error_in_loop and "bot was blocked by the user" in str(last_telegram_error_in_loop).lower()):
                         final_msg_text = USER_MESSAGES["manual_fetch_none_sent_error"]
                 if final_msg_text: 
-                    try: await bot.send_message(chat_id=chat_id, text=final_msg_text)
-                    except Exception: pass
+                    try:
+                        await bot.send_message(chat_id=chat_id, text=final_msg_text)
+                    except Exception:
+                        pass
             except Exception as e_process_user:
                 logger.error(f"Worker: Error processing tracks for user {user_id_str}: {e_process_user}", exc_info=True)
-                try: await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_generic"])
-                except Exception: pass
+                try:
+                    await bot.send_message(chat_id=chat_id, text=USER_MESSAGES["error_generic"])
+                except Exception:
+                    pass
             
             queue.task_done()
+            # Force garbage collection after processing each user
+            gc.collect()
             logger.info(f"Worker: Finished for user {user_id_str}. Delaying {DELAY_AFTER_PROCESSING_EACH_USER_MANUALLY_S}s...")
             await asyncio.sleep(DELAY_AFTER_PROCESSING_EACH_USER_MANUALLY_S)
         except asyncio.CancelledError: 
@@ -143,6 +189,10 @@ async def manual_request_worker(application: Application):
         except Exception as e_outer_loop: 
             logger.critical(f"Worker: Outer loop error: {e_outer_loop}", exc_info=True)
             await asyncio.sleep(5)
+    
+    # Final garbage collection before exiting worker
+    gc.collect()
+    logger.info("Worker: Exited.")
 
 
 # --- هندلر دکمه "دریافت آهنگ‌های جدید" ---

@@ -1,5 +1,6 @@
 # --- START OF FILE main.py ---
 import asyncio
+import gc  # Added for explicit garbage collection
 from telegram import Update, __version__ as TG_VER, Bot as TelegramBot
 try:
     from telegram.ext import __version__ as PTB_VER
@@ -238,14 +239,23 @@ class MusicBot:
 
     async def shutdown_logic(self):
         logger.info("shutdown_logic: Initiating shutdown sequence...")
+        
+        # Force garbage collection before shutdown
+        gc.collect()
+        
         await self.shutdown_manual_worker()
+        
         if self.application and self.application.running:
             logger.info("shutdown_logic: Stopping PTB application dispatcher...")
             await self.application.stop()
+        
         if self.application:
             logger.info("shutdown_logic: Shutting down PTB application...")
             await self.application.shutdown()
-        # حذف وب‌هوک هم دیگر اینجا نیست
+        
+        # Final garbage collection after shutdown to free memory
+        gc.collect()
+        
         logger.info("shutdown_logic: MusicBot application SHUT DOWN sequence complete.")
 
 
@@ -292,17 +302,36 @@ async def starlette_shutdown():
     """Starlette shutdown event: shuts down the bot."""
     global bot_instance
     logger.info("Starlette Lifespan: Shutdown initiated.")
-    if bot_instance:
-        # حذف وب‌هوک قبل از خاموش کردن کامل
-        if bot_instance.application and bot_instance.application.bot and WEBHOOK_DOMAIN:
-            try:
-                logger.info("Starlette Lifespan: Final attempt to delete webhook...")
-                await bot_instance.application.bot.delete_webhook(drop_pending_updates=True)
-                logger.info("Starlette Lifespan: Webhook DELETED (final attempt).")
-            except Exception as e_wh_del_final:
-                logger.error(f"Starlette Lifespan: Error deleting webhook during final shutdown: {e_wh_del_final}")
-        
-        await bot_instance.shutdown_logic()
+    
+    try:
+        if bot_instance:
+            # Delete webhook before completely shutting down
+            if bot_instance.application and bot_instance.application.bot and WEBHOOK_DOMAIN:
+                try:
+                    logger.info("Starlette Lifespan: Final attempt to delete webhook...")
+                    await bot_instance.application.bot.delete_webhook(drop_pending_updates=True)
+                    logger.info("Starlette Lifespan: Webhook DELETED (final attempt).")
+                except Exception as e_wh_del_final:
+                    logger.error(f"Starlette Lifespan: Error deleting webhook during final shutdown: {e_wh_del_final}")
+            
+            # Explicitly release music_fetcher to ensure browser resources are freed
+            if (bot_instance.application and 
+                'music_fetcher' in bot_instance.application.bot_data):
+                logger.info("Starlette Lifespan: Removing music_fetcher from bot_data to release browser resources.")
+                bot_instance.application.bot_data.pop('music_fetcher', None)
+            
+            # Run complete shutdown logic
+            await bot_instance.shutdown_logic()
+            
+            # Clear bot instance
+            bot_instance = None
+    except Exception as e:
+        logger.error(f"Starlette Lifespan: Error during shutdown: {e}", exc_info=True)
+    finally:
+        # Force garbage collection after shutdown
+        gc.collect()
+        logger.info("Starlette Lifespan: Garbage collection performed.")
+    
     logger.info("Starlette Lifespan: Bot shutdown logic COMPLETED.")
 
 
@@ -392,6 +421,8 @@ if __name__ == "__main__":
     except Exception as e_main_uvicorn:
         logger.critical(f"__main__: Critical error running main_for_uvicorn: {e_main_uvicorn}", exc_info=True)
     finally:
+        # Force final garbage collection
+        gc.collect()
         logger.info("__main__: Script finished executing main_for_uvicorn().")
 
 # --- END OF FILE main.py ---
